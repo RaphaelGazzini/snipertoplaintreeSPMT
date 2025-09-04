@@ -1,5 +1,5 @@
-#ifndef SNIPERTOPLAINTREE
-#define SNIPERTOPLAINTREE
+#ifndef SNIPERTOPLAINTREESPMT
+#define SNIPERTOPLAINTREESPMT
 
 #include "SniperKernel/AlgBase.h"
 #include "EvtNavigator/NavBuffer.h"
@@ -23,7 +23,7 @@ class CdGeom;
         double E2;
         double E3;
     };
-class SNiPERToPlainTree : public AlgBase
+class SNiPERToPlainTreeSPMT : public AlgBase
 {
 private :
   
@@ -32,7 +32,7 @@ private :
   
 public :
   
-  SNiPERToPlainTree(const std::string& name);
+  SNiPERToPlainTreeSPMT(const std::string& name);
   
   
   bool initialize();
@@ -46,7 +46,7 @@ public :
 private :
 
   //Alg Property
-  bool saveElec;
+  bool saveElec, saveSim, savePMT;
   int interface;
 
   //CdGeom*  m_cdGeom;
@@ -81,6 +81,17 @@ private :
   std::vector<TVector3> ALL_LPMT_pos;
   std::vector<TVector3> ALL_SPMT_pos;
   
+  // Pmt Info tree
+  TFile* PMTFile; 
+  TTree* PMTTree;
+  int m_CopyNo;
+  double m_PMTX;
+  double m_PMTY;
+  double m_PMTZ;
+  int m_Circle;
+  TString m_PMTType;
+  TString m_Pole;
+
   int m_iEvt;
  
   JM::NavBuffer* m_buf;
@@ -98,7 +109,17 @@ private :
   double m_ChargeTotWP;
   unsigned long m_TimeStampInNanoSec; 
 
-  
+  TTree* m_ntuple; // simulation tree
+  int m_TotSimPE;
+  double m_Vtx;
+  double m_Vty;
+  double m_Vtz;
+  std::vector<int> m_PDG;
+  std::vector<double> m_Edep;
+  std::vector<double> m_Qedep;
+
+
+
   TTree *m_ntuple1; // calibration tree
   int m_NbHitLPMTCalib;
   int m_NbHitSPMTCalib;

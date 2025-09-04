@@ -5,6 +5,8 @@
 #include "EvtNavigator/NavBuffer.h"
 #include <vector>
 #include "TTree.h"
+#include "TFile.h"
+#include "TString.h"
 #include "TVector3.h"
 #include "SpmtElecConfigSvc/SpmtElecConfigSvc.h"
 #include "OECTagSvc/OECTagSvc.h"
@@ -38,9 +40,14 @@ public :
   bool finalize();
   void setTxtFileName(const std::string& fileName) { m_txtFileName = fileName; }
   bool Book_tree();
+  void clearAllTrees();	
   bool LoadCalibValues(const std::string& txtFileName);
   
 private :
+
+  //Alg Property
+  bool saveElec, saveSim, savePMT;
+  int interface;
 
   //CdGeom*  m_cdGeom;
   std::map<int, CalibValues> fCalibValues;
@@ -74,6 +81,17 @@ private :
   std::vector<TVector3> ALL_LPMT_pos;
   std::vector<TVector3> ALL_SPMT_pos;
   
+  // Pmt Info tree
+  TFile* PMTFile; 
+  TTree* PMTTree;
+  int m_CopyNo;
+  double m_PMTX;
+  double m_PMTY;
+  double m_PMTZ;
+  int m_Circle;
+  TString m_PMTType;
+  TString m_Pole;
+
   int m_iEvt;
  
   JM::NavBuffer* m_buf;
@@ -91,14 +109,27 @@ private :
   double m_ChargeTotWP;
   unsigned long m_TimeStampInNanoSec; 
 
-  
+  TTree* m_ntuple; // simulation tree
+  int m_TotSimPE;
+  double m_Vtx;
+  double m_Vty;
+  double m_Vtz;
+  std::vector<int> m_PDG;
+  std::vector<double> m_Edep;
+  std::vector<double> m_Qedep;
+
+
+
   TTree *m_ntuple1; // calibration tree
   int m_NbHitLPMTCalib;
   int m_NbHitSPMTCalib;
   int m_NbHitWPCalib;
   std::vector<int> m_PmtIdCalib;
   std::vector<double> m_HitTimeCalib;
+  std::vector<double> m_HitTimeCalibTOF;
   std::vector<double> m_ChargeCalib;
+  std::vector<int> m_CircleNo;
+  std::vector<std::string> m_PmtType;
   
   
   
@@ -110,6 +141,7 @@ private :
   int m_blockID;
   int m_channelNumber;
   int m_channelID;
+  std::vector<unsigned int> m_gain;
   std::vector<unsigned int> m_blockCounter;
   std::vector<unsigned int> m_channelCounter;
   std::vector<unsigned int> m_BECTime;
@@ -133,7 +165,8 @@ private :
   TTree *m_ntuple5; // General info of the event
   uint64_t m_TriggerTime;
   int m_TriggerSize;
-  char m_TriggerName[100];
+  // char m_TriggerName[100];
+  std::vector<std::string> m_TriggerName;
   //uint64_t m_TimeStamp;
   double m_oecevt_E;
   double m_oecevt_totCharge;     
@@ -153,6 +186,7 @@ private :
   double m_RecY;
   double m_RecZ;
   double m_T0;
+
 
   double PMT_R;
   double LS_R;

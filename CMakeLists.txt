@@ -1,4 +1,4 @@
-PKG(SNiPERToPlainTree
+PKG(SNiPERToPlainTreeSPMT
     DEPENDS
         SimEvent
 	ElecEvent

@@ -5,11 +5,11 @@ import sys
 
 import Sniper
 import argparse 
-import SNiPERToPlainTree
+import SNiPERToPlainTreeSPMT
 import Geometry
 
 def get_parser():
-    parser = argparse.ArgumentParser(description="SNiPERToPlainTree module")
+    parser = argparse.ArgumentParser(description="SNiPERToPlainTreeSPMT module")
     parser.add_argument("--input", nargs="+", default=["sample_elecsim.root", "sample_calib.root"], help= "input list of file separated by space. Example sample_elecsim.root sample_calib.root")
     parser.add_argument("--input-list", default=None, help= "input file name")
     parser.add_argument("--input-correlations", nargs="+", default = None, help="Name of the correlation files")
@@ -19,8 +19,12 @@ def get_parser():
     parser.add_argument("--time-window", default="0.01", type = float, help="Time window of events")
     parser.add_argument("--enableElec", dest="enableElec", action="store_true")
     parser.add_argument("--disableElec", dest="enableElec", action="store_false")
-    parser.add_argument("--interface", type = int, default = -40000, help="Specify LS/Water interface")
     parser.set_defaults(enableElec=False)
+    parser.add_argument("--enableSim", dest="enableSim", action="store_true")
+    parser.add_argument("--disableSim", dest="enableSim", action="store_false")
+    parser.set_defaults(enableSim=False)
+    parser.add_argument("--savePMTInfo", dest="savePMTInfo", action="store_true")
+    parser.add_argument("--interface", type = int, default = -40000, help="Specify LS/Water interface")
 
     return parser
 
@@ -50,8 +54,10 @@ if __name__ == "__main__":
     pmtparamsvc = task.createSvc("PMTParamSvc")
 
 
-    alg = task.createAlg("SNiPERToPlainTree/alg_example")
+    alg = task.createAlg("SNiPERToPlainTreeSPMT/alg_example")
     alg.property("enableElec").set(args.enableElec)
+    alg.property("enableSim").set(args.enableSim)
+    alg.property("savePMTInfo").set(args.savePMTInfo)
     alg.property("interface").set(args.interface)
     
     import RootIOSvc

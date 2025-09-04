@@ -1,4 +1,4 @@
-#include "SNiPERToPlainTree.h"
+#include "SNiPERToPlainTreeSPMT.h"
 #include "TOF.h"
 
 #include "EvtNavigator/NavBuffer.h"
@@ -51,21 +51,23 @@
 //#include "Geometry/IRecGeomSvc.hh"
 #include <fstream>
 
-DECLARE_ALGORITHM(SNiPERToPlainTree);
+DECLARE_ALGORITHM(SNiPERToPlainTreeSPMT);
 
-SNiPERToPlainTree::SNiPERToPlainTree(const std::string& name)
+SNiPERToPlainTreeSPMT::SNiPERToPlainTreeSPMT(const std::string& name)
 : AlgBase(name),
   m_iEvt(0),
   m_buf(0),
   m_spmtSvc(0),
-  m_tagsvc(0) 
+  m_tagsvc(0)
 {
   declProp("TxtFileName", m_txtFileName);
   declProp("enableElec", saveElec=false);
   declProp("interface", interface = -40000);
+  declProp("enableSim", saveSim = false);
+  declProp("savePMTInfo", savePMT = false);
 }
 
-bool SNiPERToPlainTree::initialize()
+bool SNiPERToPlainTreeSPMT::initialize()
 {
 	//----------------------------------------------------------------------------
 	const std::string compilation_date = __DATE__;
@@ -78,33 +80,85 @@ bool SNiPERToPlainTree::initialize()
 	// =======================================================================
 	// Loading PMT positions
 	// =======================================================================
-	
+
+	if(savePMT){
+		PMTFile = new TFile("PmtInfo.root", "RECREATE");
+		PMTTree = new TTree("PMTInfo", "PMT Tree");
+		PMTTree->Branch("CopyNo", &m_CopyNo, "CopyNo/I");
+		PMTTree->Branch("PMTX", &m_PMTX, "PMTX/D");
+		PMTTree->Branch("PMTY", &m_PMTY, "PMTY/D");
+		PMTTree->Branch("PMTZ", &m_PMTZ, "PMTZ/D");
+		PMTTree->Branch("CircleNo", &m_Circle, "CircleNo/I");
+		PMTTree->Branch("Type", &m_PMTType);
+		PMTTree->Branch("Pole", &m_Pole);
+	}
+
+	IDService* idServ = IDService::getIdServ();
+	idServ->init();
+
 	SniperPtr<IPMTParamSvc> pmtsvc(getParent(), "PMTParamSvc");
 
 	if (ALL_LPMT_pos.size()==0 && pmtsvc.valid()) {
         TotalLPMT = pmtsvc->get_NTotal_CD_LPMT();
-        
+
         std::cout << " PMT Information " << std::endl;
-		
+
 		std::cout << "LPMT" <<std::endl;
         for (unsigned int ith = 0; ith < TotalLPMT; ith++)
         {
             TVector3 all_pmtCenter(pmtsvc->getPMTX(ith), pmtsvc->getPMTY(ith), pmtsvc->getPMTZ(ith));
             ALL_LPMT_pos.push_back(all_pmtCenter);
+
+			if(savePMT){
+				m_CopyNo = ith;
+				m_PMTX = pmtsvc->getPMTX(ith);
+				m_PMTY = pmtsvc->getPMTY(ith);
+				m_PMTZ = pmtsvc->getPMTZ(ith);
+
+				Identifier id = idServ->copyNo2Id(ith);
+				int type = CdID::pmtType(id);
+				m_Circle = CdID::circleNo(id);
+				if(type == 1) m_PMTType = "Hamamatsu";
+				else if(type == 2) m_PMTType = "NNVT";
+				if(CdID::northOrSouth(id) == 0) m_Pole = "North";
+				else m_Pole = "South";
+
+				PMTTree->Fill();
+			}
         }
 	}
-	
+
 	if (ALL_SPMT_pos.size()==0 && pmtsvc.valid()) {
 		TotalSPMT = pmtsvc->get_NTotal_CD_SPMT();
-		
+
 		std::cout << "SPMT" <<std::endl;
         for (unsigned int ith = 0; ith < TotalSPMT; ith++)
         {
-            TVector3 all_pmtCenter(pmtsvc->getPMTX(ith+17612), pmtsvc->getPMTY(ith+17612), pmtsvc->getPMTZ(ith+17612));
+            TVector3 all_pmtCenter(pmtsvc->getPMTX(ith+20000), pmtsvc->getPMTY(ith+20000), pmtsvc->getPMTZ(ith+20000));
             ALL_SPMT_pos.push_back(all_pmtCenter);
+			if(savePMT){
+				m_CopyNo = ith+20000;
+				m_PMTX = pmtsvc->getPMTX(ith+20000);
+				m_PMTY = pmtsvc->getPMTY(ith+20000);
+				m_PMTZ = pmtsvc->getPMTZ(ith+20000);
+				m_PMTType = "SPMT";
+
+				Identifier id = idServ->copyNo2Id(ith+20000);
+				int type = CdID::pmtType(id);
+				m_Circle = CdID::circleNo(id);
+				if(CdID::northOrSouth(id) == 0) m_Pole = "North";
+				else m_Pole = "South";
+
+				PMTTree->Fill();
+			}
         }
 	}
-	
+
+	if(savePMT){
+		PMTFile->cd();
+		PMTTree->Write();
+		PMTFile->Close();
+	}
 
 
 	// =======================================================================
@@ -115,7 +169,7 @@ bool SNiPERToPlainTree::initialize()
 	LogDebug << "initializing" << std::endl;
 	std::cout<<"36"<<std::endl;
 	gDirectory->pwd();
-	
+
 	SniperDataPtr<JM::NavBuffer>  navBuf(getParent()/*getRoot()*/,"/Event");
 	std::cout<<"Parent="<<getParent()<<"Root="<<getRoot()<<std::endl;//" Parent Name"<<getParentName()<<std::endl;
 	if ( navBuf.invalid() ) {
@@ -130,7 +184,7 @@ bool SNiPERToPlainTree::initialize()
 	    return false;
 	}
 	m_spmtSvc = svc.data();
-	
+
 	//get OECConfig service
 	SniperPtr<OECTagSvc> tagsvc(getParent(),"OECTagSvc");
 	if( tagsvc.invalid()) {
@@ -141,7 +195,7 @@ bool SNiPERToPlainTree::initialize()
 	//get predefined tags (as example BiPo212)
 	i_pBiPo212pair= m_tagsvc->getpTag("BiPo212Pair");
 	i_dBiPo212pair= m_tagsvc->getdTag("BiPo212Pair");
-	
+
 	i_pBiPo214pair= m_tagsvc->getpTag("BiPo214Pair");
 	i_dBiPo214pair= m_tagsvc->getdTag("BiPo214Pair");
 
@@ -163,7 +217,7 @@ bool SNiPERToPlainTree::initialize()
 	/*
 	std::cout<<"file "<<m_txtFileName<<std::endl;
 	std::string txtFile = "fileVtx_RUN.5162.JUNODAQ.LSFilling.ds-2.global_trigger.20250415222246.137.txt"; // ou récupéré dynamiquement
-	
+
 	if (!LoadCalibValues(m_txtFileName)) {
 			return false; // ou voir comment gérer l'erreur
 		}
@@ -171,7 +225,7 @@ bool SNiPERToPlainTree::initialize()
   	return true;
 }
 
-bool SNiPERToPlainTree::execute()
+bool SNiPERToPlainTreeSPMT::execute()
 {
 	std::cout << "executing: " << m_iEvt++
 		<< std::endl;
@@ -179,6 +233,7 @@ bool SNiPERToPlainTree::execute()
 	gDirectory->pwd();
 
 //      JM::EvtNavigator* navig = 0;
+	JM::SimEvt* simevent = 0;
 	JM::CdVertexRecEvt* recevent = 0;
 	JM::CdLpmtCalibEvt* calibeventLPMT = 0;
 	JM::CdSpmtCalibEvt* calibeventSPMT = 0;
@@ -190,50 +245,57 @@ bool SNiPERToPlainTree::execute()
 	JM::CdSpmtElecEvt *eventSPMT = 0;
 	JM::CdTriggerEvt *triggerevent =0;
 	JM::WpTriggerEvt *Wptriggerevent =0;
-	JM::OecEvt *oecevt =0;
+	JM::OecEvt *oecevt = 0;
 	// Get the events of different stages
 	// calculate block charge and time
-	
+
 	auto nav = m_buf->curEvt();
 	gDirectory->pwd();
 	const auto& paths = nav->getPath();
 	const auto& refs = nav->getRef();
-	
+
 	LogInfo << "Detector type is  " <<nav->getDetectorType()<<std::endl;
 	LogInfo << "Start to Explore SmartRef: " << std::endl;
 	LogInfo << "Size of paths: " << paths.size() << std::endl;
 	LogInfo << "Size of refs: " << refs.size() << std::endl;
-	
+
 	for (size_t i = 0; i < paths.size(); ++i) {
         LogInfo << refs[i]<<" -> ref: " << std::endl;
         const std::string& path = paths[i];
         JM::SmartRef* ref = refs[i];
         JM::EventObject* evtobj = ref->GetObject();
-        
+
         LogInfo << " path: " << path
             << " ref->entry(): " << ref->entry()
             << " evtobj: " << evtobj;
-        
+
         if (path=="/Event/Sim") {
             auto hdr = dynamic_cast<JM::SimHeader*>(evtobj);
             LogInfo <<i<<" SimHeader: " << hdr;
         }
         LogInfo << std::endl;
 	}
-	
-	
+
+	auto simheader = JM::getHeaderObject<JM::SimHeader>(nav);
+	if(simheader){
+		simevent = (JM::SimEvt*)simheader->event();
+		LogInfo << "SimEvent Read in: " << simevent << std::endl;
+		LogInfo << "SimEvent Track: " << simevent->getTracksVec().size() << std::endl;
+		LogInfo << "SimEvent Hits: " << simevent->getCDHitsVec().size() << std::endl;
+	}
+
 	auto recheader = JM::getHeaderObject<JM::CdVertexRecHeader>(nav);
 	if (recheader) {
 	  recevent = recheader->event();
 	  LogInfo << "RecEvent Read in: " << recevent << std::endl;
 	}
-	
+
 	auto calibheaderLPMT = JM::getHeaderObject<JM::CdLpmtCalibHeader>(nav);
 	if (calibheaderLPMT) {
 	  calibeventLPMT = calibheaderLPMT->event();
 	  LogInfo << "CalibEventLPMT Read in: " << calibeventLPMT << std::endl;
 	}
-	
+
 	auto calibheaderSPMT = JM::getHeaderObject<JM::CdSpmtCalibHeader>(nav);
 	if (calibheaderSPMT) {
 	  calibeventSPMT = calibheaderSPMT->event();
@@ -244,7 +306,7 @@ bool SNiPERToPlainTree::execute()
 	  calibeventWP = calibheaderWP->event();
 	  LogInfo << "CalibEventWP Read in: " << calibeventWP << std::endl;
 	}
-	
+
 	auto elecheaderLPMT = JM::getHeaderObject<JM::CdLpmtElecHeader>(nav);
 	if(elecheaderLPMT){eventLPMT = elecheaderLPMT->event();
 	  LogInfo << "ElecEventLPMT Read in: " << eventLPMT << std::endl;
@@ -253,41 +315,41 @@ bool SNiPERToPlainTree::execute()
 	if(elecheaderSPMT){eventSPMT = elecheaderSPMT->event();
 	  LogInfo << "ElecEventSPMT Read in: " << eventSPMT << std::endl;
 	}
-	
+
 	auto triggerheader = JM::getHeaderObject<JM::CdTriggerHeader>(nav);
 	if(triggerheader){triggerevent = triggerheader->event();
-	  std::cout<<" CD TriggerEvent Read in: " << triggerevent <<std::endl;	
+	  std::cout<<" CD TriggerEvent Read in: " << triggerevent <<std::endl;
 	}
-	
+
 	auto Wptriggerheader = JM::getHeaderObject<JM::WpTriggerHeader>(nav);
 	if(Wptriggerheader){Wptriggerevent = Wptriggerheader->event();
-	  std::cout<<" WP TriggerEvent Read in: " << Wptriggerevent <<std::endl;	
+	  std::cout<<" WP TriggerEvent Read in: " << Wptriggerevent <<std::endl;
 	}
-	
+
         auto wptriggerhdr = JM::getHeaderObject<JM::WpTriggerHeader>(nav);
         if (wptriggerhdr) {
-	  std::cout<<" WP TriggerEvent"<<std::endl;	
+	  std::cout<<" WP TriggerEvent"<<std::endl;
         }
-	
+
         auto mmtriggerhdr = JM::getHeaderObject<JM::MMTriggerHeader>(nav);
         if (mmtriggerhdr) {
-	  std::cout<<" MM TriggerEvent" <<std::endl;	
+	  std::cout<<" MM TriggerEvent" <<std::endl;
         }
-	
+
 	auto OEChdr = JM::getHeaderObject<JM::OecHeader>(nav);
 	if(OEChdr){
 	  std::cout<<" OEC Header"<<std::endl;
 	  oecevt = dynamic_cast<JM::OecEvt*>(OEChdr->event("JM::OecEvt"));
 	}
-	
-	clearAllTrees(); //Clearing all trees variables	
+
+	clearAllTrees(); //Clearing all trees variables
 
 	if(oecevt)
 	{
-        m_oecevt_E = oecevt->getEnergy();     
-        m_oecevt_totCharge = oecevt->getTotalCharge();     
-        m_oecevt_X = oecevt->getVertexX();     
-        m_oecevt_Y = oecevt->getVertexY();     
+        m_oecevt_E = oecevt->getEnergy();
+        m_oecevt_totCharge = oecevt->getTotalCharge();
+        m_oecevt_X = oecevt->getVertexX();
+        m_oecevt_Y = oecevt->getVertexY();
         m_oecevt_Z = oecevt->getVertexZ();
         m_mytag = oecevt->getTag();
         m_EventTag.clear();
@@ -300,7 +362,7 @@ bool SNiPERToPlainTree::execute()
         if((m_mytag & i_SingleSE) == i_SingleSE) m_EventTag.push_back(7);
         if((m_mytag & i_SingleME) == i_SingleME) m_EventTag.push_back(8);
         if((m_mytag & i_SingleLE) == i_SingleLE) m_EventTag.push_back(9);
-        if((m_mytag & i_pSpallNeutron) == i_pSpallNeutron) m_EventTag.push_back(10); 
+        if((m_mytag & i_pSpallNeutron) == i_pSpallNeutron) m_EventTag.push_back(10);
         if((m_mytag & i_dSpallNeutron) == i_dSpallNeutron) m_EventTag.push_back(11);
         if((m_mytag & i_pB12) == i_pB12)  m_EventTag.push_back(12);
         if((m_mytag & i_dB12) == i_dB12) m_EventTag.push_back(13);
@@ -312,12 +374,12 @@ bool SNiPERToPlainTree::execute()
 	LS_R = 17.7; //m
 	RfrIndxLS = 1.5;
 	RfrIndxWR = 1.355;
-	
+
 	c = 299792458.0; //m/s
 
-	IDService* idservice = IDService::getIdServ(); //I think this is needed to retrieve the gcu number 
+	IDService* idservice = IDService::getIdServ(); //I think this is needed to retrieve the gcu number
 	idservice->init();
-	
+
 	// char TriggerName[100];
 	if(triggerevent)
 	{
@@ -325,7 +387,7 @@ bool SNiPERToPlainTree::execute()
 	    const auto& pmtFired = triggerevent->nHitMultiplicity();
 	    //const auto& volID = triggerevent->volumeId();
 	    const auto& trigTime = triggerevent->triggerTime();
-	    
+
 	    //std::cout<< "Trigger type size " <<type.size()<<std::endl;
 	    //std::cout<< "Triggered PMT size " <<pmtFired<<std::endl;
 	    //std::cout<<"Trigger time "<<trigTime.GetNanoSec()<<std::endl;
@@ -341,16 +403,16 @@ bool SNiPERToPlainTree::execute()
 	    // } else {
 	    //   m_TriggerName[0] = '\0'; // Valeur par défaut si le vecteur est vide
 	    // }
-	    
+
 	    std::cout<<"type size "<<type.size()<<std::endl;
 		if(type.size() != 0){
-			for(auto it = 0; it<type.size(); it++){ 
+			for(auto it = 0; it<type.size(); it++){
 				std::cout<<"Trigger type = "<<type[it]<<std::endl;
 				m_TriggerName.push_back(type[it]);
 			}
 		}
 	}
-	
+
 	const auto& timestamp = nav->TimeStamp();
 	int RunNumber = nav->RunID();
 	uint32_t EventNumber = nav->EventID();
@@ -361,9 +423,32 @@ bool SNiPERToPlainTree::execute()
 	unsigned long long tempTS =  timestamp.GetSec()*1e9 + timestamp.GetNanoSec() ;
 	uint64_t TimeRef_2 =  timestamp.GetSec()*1000000000ULL + timestamp.GetNanoSec() ;
 	unsigned long long TimeStampLPMT = (tempTS&0xFFFFFFFF00000000) ;
-	
+
 	m_TimeStamp = TimeRef_2;
-	
+
+
+	if(simevent && saveSim){
+		const auto& tracks = simevent->getTracksVec();
+		const auto& pmthit = simevent->getCDHitsVec();
+		for (auto it = tracks.begin(); it != tracks.end(); it++){
+			m_PDG.push_back((*it)->getPDGID());
+			m_Edep.push_back((*it)->getEdep());
+			m_Qedep.push_back((*it)->getQEdep());
+			if(it == tracks.begin()){
+				m_Vtx = (*it)->getInitX();
+				m_Vty = (*it)->getInitY();
+				m_Vtz = (*it)->getInitZ();
+			}
+		}
+		for (auto it = pmthit.begin(); it != pmthit.end(); it++){
+			m_TotSimPE += (*it)->getNPE();
+		}
+		
+		m_ntuple->Fill();
+	}
+
+
+
 	m_WPnHit=0;
 	m_WPTrigTime=0;
 	if(Wptriggerevent)
@@ -373,11 +458,11 @@ bool SNiPERToPlainTree::execute()
 	    m_WPnHit = WPnHit;
 	    m_WPTrigTime = WPTrigTime.GetNanoSec();
 	}
-	
+
 	if(eventLPMT && saveElec)
 	{
 	    //std::cout<<"eventLPMT"<<std::endl;
-	    LogInfo <<"Processing JM:CdLpmtElecEvt "<<std::endl; 
+	    LogInfo <<"Processing JM:CdLpmtElecEvt "<<std::endl;
 	    //m_DateTimeLPMTElec = trigTime64bits;
 	    //		cout<<"m_DateTimeLPMTElec="<<m_DateTimeLPMTElec<<endl;
 	    //m_TriggerTimeLPMTElec = trigTime48bits;
@@ -387,21 +472,21 @@ bool SNiPERToPlainTree::execute()
 	    LogInfo <<"Number of fired LPMT channel in the event "<<elecLPMT.size()<<std::endl;
 	    m_NbFiredChannelLPMTElec = elecLPMT.size();
 	    for(auto it = elecLPMT.begin();it!=elecLPMT.end();it++)
-	    {  
+	    {
 			m_GCUNumberLPMTElec = idservice->id2GCU(Identifier(it->first));
 			m_ChargeLPMTElec.reserve( ((it->second)->charge()).size() );
 			m_HitTimeLPMTElec.reserve( ((it->second)->time()).size() );
-			
+
 			m_CopyNoLPMTElec = idservice->id2CopyNo(Identifier(it->first));
 			m_PmtIDLPMTElec = (it->first);
 			m_HitTimeLPMTElec.assign( ((it->second)->time()).begin(), ((it->second)->time()).end() );
 			m_ChargeLPMTElec.assign( ((it->second)->charge()).begin(), ((it->second)->charge()).end()  );
 			m_NbHitLPMTElec+=m_HitTimeLPMTElec.size();
-			
+
 			m_ntuple4->Fill();
 	    }
 	}
-	
+
 	if(eventSPMT && saveElec)
 	{
 	    //std::cout<<"eventSPMT"<<std::endl;
@@ -415,7 +500,7 @@ bool SNiPERToPlainTree::execute()
 		int channelID = idservice->id2Channel(Identifier(it->first));
 		Identifier id = static_cast<Identifier>(it->first);
 		int pmtid = idservice->id2CopyNo(id);
-		//std::cout<<"gcuid = "<<" channelID="<<channelID<<std::endl;	
+		//std::cout<<"gcuid = "<<" channelID="<<channelID<<std::endl;
 		//std::cout<<"it->first "<<int(it->first)<<" "<<pmtid<<std::endl;
 		m_charge.reserve((it->second)->charge().size()); // Reserving a vector large enough avoid reallocation when push_back hits the last pre-allocated memory case
 		m_blockCounter.reserve((it->second)->blockCounter().size());
@@ -425,7 +510,7 @@ bool SNiPERToPlainTree::execute()
 		m_CTOverflow.reserve((it->second)->ctOverflow().size());
 		m_fineTime.reserve((it->second)->fineTime().size());
 		m_channelFlag.reserve((it->second)->channelFlag().size());
-		
+
 		m_PmtIdElec = pmtid;
 		m_blockID = ((it->second)->blockID());
 		m_channelNumber = ((it->second)->channelNumber());
@@ -460,7 +545,7 @@ bool SNiPERToPlainTree::execute()
 		//			m_NbHitSPMTElec+=m_HitTimeElec.size();
 	      }
 	}
-	
+
 	double ChargeTot=0;
 	double ChargeTotUp=0;
 	std::vector<int> tempPmtIds;
@@ -468,7 +553,7 @@ bool SNiPERToPlainTree::execute()
 	std::vector<double> tempCharges;
 	std::vector<int> tempCircleNo;
 	std::vector<std::string> tempType;
-	
+
 	double VtxReco=m_oecevt_X;
 	double VtyReco=m_oecevt_Y;
 	double VtzReco=m_oecevt_Z;
@@ -481,7 +566,7 @@ bool SNiPERToPlainTree::execute()
 			auto calib = *chit;
 			unsigned int pmtId = calib->pmtId();
 			Identifier id = Identifier(pmtId);
-			//PmtGeom *pG = m_cdGeom->getPmt(id); 
+			//PmtGeom *pG = m_cdGeom->getPmt(id);
 			int TruePM=CdID::module(id);
 			int CircleNo = CdID::circleNo(id);
 			int PmtType = CdID::pmtType(id);
@@ -492,7 +577,7 @@ bool SNiPERToPlainTree::execute()
 			//int pmtid = idservice->id2CopyNo(id);
 			//std::cout<<"TruePM "<<TruePM<<std::endl;
 			m_NbHitLPMTCalib+=calib->size();
-		
+
 			// std::cout<<"DANS CALIB "<<m_iEvt<<" "<<VtxReco<<" "<<VtyReco<<" "<<VtzReco<<std::endl;
 			for(unsigned int j=0;j<calib->size();j++){
 				tempPmtIds.push_back(TruePM);
@@ -524,20 +609,23 @@ bool SNiPERToPlainTree::execute()
 		m_CircleNo.insert(m_CircleNo.end(), tempCircleNo.begin(), tempCircleNo.end());
 		m_PmtType.insert(m_PmtType.end(), tempType.begin(), tempType.end());
 	}
-	 
+
 	 ChargeTot=0;
 	if(calibeventSPMT)
 	{
 		const auto& chhlistSPMT = calibheaderSPMT->event()->calibPMTCol();
 		for (auto cchit = chhlistSPMT.begin(); cchit!=chhlistSPMT.end(); ++cchit) {
 			auto calibSPMT = *cchit;
-			
+
+			IDService* idServ = IDService::getIdServ();
+			idServ->init();
+
 			unsigned int pmtId = calibSPMT->pmtId();
 			Identifier id = Identifier(pmtId);
 			int TruePM=CdID::module(id);
 			int CircleNo = CdID::circleNo(id);
-			//TruePM+=20000-17612;
-			
+			TruePM+=20000-17612;
+
 			m_NbHitSPMTCalib+=calibSPMT->size();
 			for(unsigned int j=0;j<calibSPMT->size();j++)
 			{
@@ -555,12 +643,12 @@ bool SNiPERToPlainTree::execute()
 				m_PmtType.push_back("SPMT");
 				//m_ChargeCalib.push_back(calibSPMT->charge(j));
 				//ChargeTot+=calibSPMT->charge(j);
-			}	 
+			}
 		}
 	}
 	 m_ChargeTotSPMT = ChargeTot;
 	 //	std::cout<<"CHARGE SPMT "<<m_ChargeTotSPMT<<std::endl;
-	 
+
 	ChargeTot=0;
 	if(calibeventWP)
 	{
@@ -575,14 +663,14 @@ bool SNiPERToPlainTree::execute()
 	}
 	 m_ChargeTotWP = ChargeTot;
 	 //std::cout<<"CHARGE WP "<<m_ChargeTotWP<<std::endl;
-	 
+
 	if (recevent)
 	{
 		// std::cout << "ADDING REC INFO TO PLAIN" << std::endl;
 		const auto& recvertices = recevent->vertices();
 		LogInfo << " CdVertexRecEvt: " << std::endl;
 		LogInfo << " - number of vertices: " << recevent->nVertices() << std::endl;
-		
+
 		for(auto vertex: recvertices)
 		{
 			m_TotalPERec = vertex->peSum();
@@ -591,11 +679,11 @@ bool SNiPERToPlainTree::execute()
 			m_RecX = vertex->x();
 			m_RecY = vertex->y();
 			m_RecZ = vertex->z();
-			m_T0 = vertex->t0();		 
+			m_T0 = vertex->t0();
 		}
 
 		if (calibeventLPMT || calibeventSPMT){
-			
+
 			TVector3 vertex(m_RecX, m_RecY, m_RecZ);
 			for (size_t i = 0; i < m_PmtIdCalib.size(); i++)
 			{
@@ -605,16 +693,16 @@ bool SNiPERToPlainTree::execute()
 					double timeTOF = m_HitTimeCalib.at(i) - TOF.CalTOF();
 					m_HitTimeCalibTOF.push_back(timeTOF);
 				}
-				else if (pmtid >= 17612){
-					TOFCalculator TOF(vertex, ALL_SPMT_pos.at(pmtid - 17612), interface);
+				else if (pmtid >= 20000){
+					TOFCalculator TOF(vertex, ALL_SPMT_pos.at(pmtid - 20000), interface);
 					double timeTOF = m_HitTimeCalib.at(i) - TOF.CalTOF();
 					m_HitTimeCalibTOF.push_back(timeTOF);
 				}
 			}
-			
+
 		}
 	}
-	if(calibeventLPMT || calibeventSPMT || calibeventWP || oecevt) //If there is a trigger fill calib tree 
+	if(calibeventLPMT || calibeventSPMT || calibeventWP || oecevt) //If there is a trigger fill calib tree
 	{
 		std::cout << "Fill Calib " << std::endl;
 		m_ntuple1->Fill();
@@ -629,15 +717,26 @@ bool SNiPERToPlainTree::execute()
 		std::cout<<"Fill Rec evt "<<std::endl;
 		m_ntuple6->Fill();
 	}
-	 
+
 	 return true;
-	 
+
 }
 
-bool SNiPERToPlainTree::Book_tree()
+bool SNiPERToPlainTreeSPMT::Book_tree()
 {
 	SniperPtr<RootWriter> svc(*getRoot(),"RootWriter");
-	
+
+	if(saveSim){
+		m_ntuple = svc->bookTree(*m_par, "Data/Sim", "SimTree");
+		m_ntuple->Branch("EntryNb", &m_iEvt, "EntryNb/I");
+		m_ntuple->Branch("TotalPE", &m_TotSimPE, "TotalPE/I");
+		m_ntuple->Branch("Vtx", &m_Vtx, "Vtx/D");
+		m_ntuple->Branch("Vty", &m_Vty, "Vty/D");
+		m_ntuple->Branch("Vtz", &m_Vtz, "Vtz/D");
+		m_ntuple->Branch("PDGID", &m_PDG);
+		m_ntuple->Branch("Edep", &m_Edep);
+		m_ntuple->Branch("Qedep", &m_Qedep);
+	}
 	m_ntuple1 = svc->bookTree(*m_par,"Data/Calib", "CalibTree");
 	m_ntuple1->Branch("EntryNb", &m_iEvt, "EntryNb/I");
 	m_ntuple1->Branch("RunNb", &m_iRun,"RunNb/I");
@@ -655,16 +754,16 @@ bool SNiPERToPlainTree::Book_tree()
 	m_ntuple1->Branch("PmtIDCalib", &m_PmtIdCalib);
 	m_ntuple1->Branch("PmtCircle", &m_CircleNo);
 	m_ntuple1->Branch("PmtType", &m_PmtType);
-	m_ntuple1->Branch("HitTimeCalib", &m_HitTimeCalib); 
+	m_ntuple1->Branch("HitTimeCalib", &m_HitTimeCalib);
 	m_ntuple1->Branch("HitTimeCalibTOF", &m_HitTimeCalibTOF);
-	m_ntuple1->Branch("ChargeCalib", &m_ChargeCalib); 
-	
+	m_ntuple1->Branch("ChargeCalib", &m_ChargeCalib);
+
 	if(saveElec){
 		m_ntuple3 = svc->bookTree(*m_par,"Data/SPMTElec", "ElecTreeSPMT");
 		m_ntuple3->Branch("EntryNb", &m_iEvt, "EntryNb/I");
 		m_ntuple3->Branch("NbHiSPMTElec", &m_NbHitSPMTElec, "NbHitSPMTElec/I");
-		m_ntuple3->Branch("GCUID", &m_GCUNumber,"GCUID/I"); 
-		m_ntuple3->Branch("PmtIDElec", &m_PmtIdElec,"PmtIDElec/I"); 
+		m_ntuple3->Branch("GCUID", &m_GCUNumber,"GCUID/I");
+		m_ntuple3->Branch("PmtIDElec", &m_PmtIdElec,"PmtIDElec/I");
 		m_ntuple3->Branch("blockID", &m_blockID,"blockID/I");
 		m_ntuple3->Branch("channelNumber", &m_channelNumber,"channelNumber/I");
 		m_ntuple3->Branch("channelID", &m_channelID,"channelID/I");
@@ -678,16 +777,16 @@ bool SNiPERToPlainTree::Book_tree()
 		m_ntuple3->Branch("chargeSPMTElec", &m_charge);
 		m_ntuple3->Branch("channelFlag", &m_channelFlag);
 		m_ntuple3->Branch("NbHitSPMTElec", &m_NbHitSPMTElec, "NbHitSPMTElec/I");
-	
+
 		// m_ntuple4 = svc->bookTree(*m_par,"Data/LPMTElec", "ElecTreeLPMT");
 		// m_ntuple4->Branch("EntryNb", &m_iEvt, "EntryNb/I");
 		// m_ntuple4->Branch("TriggerTime",&m_Trigger,"TriggerTime/l");
 		// m_ntuple4->Branch("TimeStamp",&m_TimeStamp,"TimeStamp/l");
-		// m_ntuple4->Branch("NbFiredChannelLPMTElec",&m_NbFiredChannelLPMTElec,"NbFiredChannelLPMTElec/I");	
-		// m_ntuple4->Branch("GCUNumberLPMTElec", &m_GCUNumberLPMTElec,"GCUNumberLPMTElec/I"); 
-		// m_ntuple4->Branch("PmtIDLPMTElec", &m_PmtIDLPMTElec,"PmtIDLPMTElec/I"); 
+		// m_ntuple4->Branch("NbFiredChannelLPMTElec",&m_NbFiredChannelLPMTElec,"NbFiredChannelLPMTElec/I");
+		// m_ntuple4->Branch("GCUNumberLPMTElec", &m_GCUNumberLPMTElec,"GCUNumberLPMTElec/I");
+		// m_ntuple4->Branch("PmtIDLPMTElec", &m_PmtIDLPMTElec,"PmtIDLPMTElec/I");
 		// m_ntuple4->Branch("CopyNoLPMTElec",&m_CopyNoLPMTElec,"CopyNoLPMTElec/I");
-		// m_ntuple4->Branch("HitTimeLPMTElec", &m_HitTimeLPMTElec); 
+		// m_ntuple4->Branch("HitTimeLPMTElec", &m_HitTimeLPMTElec);
 		// m_ntuple4->Branch("ChargeLPMTElec", &m_ChargeLPMTElec);
 		// m_ntuple4->Branch("NbHitLPMTElec", &m_NbHitLPMTElec, "NbHitLPMTElec/I");
 	}
@@ -702,15 +801,15 @@ bool SNiPERToPlainTree::Book_tree()
 	m_ntuple5->Branch("TriggerName",&m_TriggerName);
 	m_ntuple5->Branch("TimeStamp",&m_TimeStamp,"TimeStamp/l");
 	m_ntuple5->Branch("OECEnergy",&m_oecevt_E,"OECEnergy/D");
-	m_ntuple5->Branch("OECTotCharge",&m_oecevt_totCharge,"OECTotCharge/D");     
+	m_ntuple5->Branch("OECTotCharge",&m_oecevt_totCharge,"OECTotCharge/D");
 	m_ntuple5->Branch("OECX",&m_oecevt_X,"OECX/D");
 	m_ntuple5->Branch("OECY",&m_oecevt_Y,"OECY/D");
-	m_ntuple5->Branch("OECZ",&m_oecevt_Z,"OECZ/D"); 
+	m_ntuple5->Branch("OECZ",&m_oecevt_Z,"OECZ/D");
     m_ntuple5->Branch("OECTag",&m_mytag,"OECTag/I");
 	m_ntuple5->Branch("TagEvent",&m_EventTag);
 	m_ntuple5->Branch("WPnHit",&m_WPnHit,"WPnHit/I");
 	m_ntuple5->Branch("WPTrigTime",&m_WPTrigTime,"WPTrigTime/l");
-	
+
 	m_ntuple6 = svc->bookTree(*m_par, "Data/Reco", "Reconstruction Tree");
 	m_ntuple6->Branch("EntryNb", &m_iEvt, "EntryNb/I");
 	m_ntuple6->Branch("NFiredPMT", &m_NFiredPMT, "NFiredPMT/I");
@@ -721,78 +820,86 @@ bool SNiPERToPlainTree::Book_tree()
 	m_ntuple6->Branch("Recz", &m_RecZ, "Recz/D");
 	m_ntuple6->Branch("RecT0", &m_T0, "RecT0/D");
 
-	
-	
+
+
 	return true;
 }
-void SNiPERToPlainTree::clearAllTrees()
+void SNiPERToPlainTreeSPMT::clearAllTrees()
 {
-   m_ChargeTotLPMT=0;
-   m_ChargeTotUpLPMT=0;
-   m_ChargeTotSPMT=0;
-   m_ChargeTotWP=0;
-   m_TimeStampInNanoSec=0; 
-   m_NbHitLPMTCalib=0;
-   m_NbHitSPMTCalib=0;
-   m_NbHitWPCalib=0;
-   m_PmtIdCalib.clear();
-   m_HitTimeCalib.clear();
-   m_HitTimeCalibTOF.clear();
-   m_ChargeCalib.clear();
-   m_CircleNo.clear();
-   m_PmtType.clear();
-   m_NbHitLPMTElec=0;
-   m_NbHitSPMTElec=0;
-   m_GCUNumber=0;
-   m_PmtIdElec=0;
-   m_blockID=0;
-   m_channelNumber=0;
-   m_channelID=0;
-    m_gain.clear();
-    m_blockCounter.clear();
-    m_channelCounter.clear();
-    m_BECTime.clear();
-    m_coarseTime.clear();
-    m_CTOverflow.clear();
-    m_fineTime.clear();
-    m_charge.clear();
-    m_channelFlag.clear();
-   m_TimeStampLPMTElec=0;
-   m_NbFiredChannelLPMTElec=0; //Number of different channels fired in the event 
-   m_GCUNumberLPMTElec=0; //GCU Number for LPMT
-   m_CopyNoLPMTElec=0;
-   m_PmtIDLPMTElec=0;    // PmtID
-    m_HitTimeLPMTElec.clear(); // vector of Hit Time of LPMT
-	m_ChargeLPMTElec.clear(); // vector of charge of LPMT
-  	m_TriggerTime=0;
-   	m_TriggerSize=0;
-//   m_TriggerName[100];
-	m_TriggerName.clear();
-   m_oecevt_E=0;
-   m_oecevt_totCharge=0;     
-   m_oecevt_X=0;
-   m_oecevt_Y=0;
-   m_oecevt_Z=0; 
-   m_mytag=0;
-   m_EventTag.clear();
-   m_WPnHit=0;
-   m_WPTrigTime=0;
-   m_TotalPERec=0;
-   m_NFiredPMT=0;
-   m_RecE=0;
-   m_RecX=0;
-   m_RecY=0;
-   m_RecZ=0;
-   m_T0=0;
+	m_TotSimPE = 0;
+	m_Vtx = 0.0;
+	m_Vty = 0.0;
+	m_Vtz = 0.0;
+	m_PDG.clear();
+	m_Edep.clear();
+	m_Qedep.clear();
 
-   PMT_R=0;
-   LS_R=0;
-  
-   RfrIndxLS=0;
-   RfrIndxWR=0;
-   c=0;
+	m_ChargeTotLPMT=0;
+	m_ChargeTotUpLPMT=0;
+	m_ChargeTotSPMT=0;
+	m_ChargeTotWP=0;
+	m_TimeStampInNanoSec=0;
+	m_NbHitLPMTCalib=0;
+	m_NbHitSPMTCalib=0;
+	m_NbHitWPCalib=0;
+	m_PmtIdCalib.clear();
+	m_HitTimeCalib.clear();
+	m_HitTimeCalibTOF.clear();
+	m_ChargeCalib.clear();
+	m_CircleNo.clear();
+	m_PmtType.clear();
+	m_NbHitLPMTElec=0;
+	m_NbHitSPMTElec=0;
+	m_GCUNumber=0;
+	m_PmtIdElec=0;
+	m_blockID=0;
+	m_channelNumber=0;
+	m_channelID=0;
+	m_gain.clear();
+	m_blockCounter.clear();
+	m_channelCounter.clear();
+	m_BECTime.clear();
+	m_coarseTime.clear();
+	m_CTOverflow.clear();
+	m_fineTime.clear();
+	m_charge.clear();
+	m_channelFlag.clear();
+	m_TimeStampLPMTElec=0;
+	m_NbFiredChannelLPMTElec=0; //Number of different channels fired in the event
+	m_GCUNumberLPMTElec=0; //GCU Number for LPMT
+	m_CopyNoLPMTElec=0;
+	m_PmtIDLPMTElec=0;    // PmtID
+	m_HitTimeLPMTElec.clear(); // vector of Hit Time of LPMT
+	m_ChargeLPMTElec.clear(); // vector of charge of LPMT
+	m_TriggerTime=0;
+	m_TriggerSize=0;
+	//   m_TriggerName[100];
+	m_TriggerName.clear();
+	m_oecevt_E=0;
+	m_oecevt_totCharge=0;
+	m_oecevt_X=0;
+	m_oecevt_Y=0;
+	m_oecevt_Z=0;
+	m_mytag=0;
+	m_EventTag.clear();
+	m_WPnHit=0;
+	m_WPTrigTime=0;
+	m_TotalPERec=0;
+	m_NFiredPMT=0;
+	m_RecE=0;
+	m_RecX=0;
+	m_RecY=0;
+	m_RecZ=0;
+	m_T0=0;
+
+	PMT_R=0;
+	LS_R=0;
+
+	RfrIndxLS=0;
+	RfrIndxWR=0;
+	c=0;
 }
-bool SNiPERToPlainTree::LoadCalibValues(const std::string& txtFileName) {
+bool SNiPERToPlainTreeSPMT::LoadCalibValues(const std::string& txtFileName) {
     std::ifstream infile(txtFileName);
     if (!infile.is_open()) {
         std::cerr << "Erreur : impossible d’ouvrir le fichier " << txtFileName << std::endl;
@@ -811,7 +918,7 @@ bool SNiPERToPlainTree::LoadCalibValues(const std::string& txtFileName) {
 }
 
 
-bool SNiPERToPlainTree::finalize()
+bool SNiPERToPlainTreeSPMT::finalize()
 {
 	LogDebug << "finalizing" << std::endl;
 	return true;
@@ -819,37 +926,37 @@ bool SNiPERToPlainTree::finalize()
 
 
 // Can be removed if TOFCalculator class is kept
-double SNiPERToPlainTree::ComputeLTOF(double pmtid, double evtx, double evty, double evtz){
+double SNiPERToPlainTreeSPMT::ComputeLTOF(double pmtid, double evtx, double evty, double evtz){
   double pmt_pos_x = ALL_LPMT_pos.at(pmtid).X();
   double pmt_pos_y = ALL_LPMT_pos.at(pmtid).Y();
   double pmt_pos_z = ALL_LPMT_pos.at(pmtid).Z();
-  
+
   double dx = (pmt_pos_x - evtx);
   double dy = (pmt_pos_y - evty);
   double dz = (pmt_pos_z - evtz);
-  
+
   double Evt = sqrt(evtx*evtx + evty*evty + evtz*evtz);
   double Dist = sqrt(dx*dx + dy*dy + dz*dz);
   double costheta = (Dist*Dist + PMT_R*PMT_R*1e6 - Evt*Evt)/(2.*Dist*PMT_R*1e3); //Al Kashi
   double LengthWater = 1e3*PMT_R*costheta - 1e3*sqrt(PMT_R*costheta*PMT_R*costheta - PMT_R*PMT_R + LS_R*LS_R);
-  
+
   return RfrIndxLS*(Dist-LengthWater)*1e6/c + RfrIndxWR*LengthWater*1e6/c;
 }
 
-double SNiPERToPlainTree::ComputeSTOF(double pmtid, double evtx, double evty, double evtz){
+double SNiPERToPlainTreeSPMT::ComputeSTOF(double pmtid, double evtx, double evty, double evtz){
   pmtid = pmtid - 20000;
   double pmt_pos_x = ALL_SPMT_pos.at(pmtid).X();
   double pmt_pos_y = ALL_SPMT_pos.at(pmtid).Y();
   double pmt_pos_z = ALL_SPMT_pos.at(pmtid).Z();
-  
+
   double dx = (pmt_pos_x - evtx);
   double dy = (pmt_pos_y - evty);
   double dz = (pmt_pos_z - evtz);
-  
+
   double Evt = sqrt(evtx*evtx + evty*evty + evtz*evtz);
   double Dist = sqrt(dx*dx + dy*dy + dz*dz);
   double costheta = (Dist*Dist + PMT_R*PMT_R*1e6 - Evt*Evt)/(2.*Dist*PMT_R*1e3); //Al Kashi
   double LengthWater = 1e3*PMT_R*costheta - 1e3*sqrt(PMT_R*costheta*PMT_R*costheta - PMT_R*PMT_R + LS_R*LS_R);
-  
+
   return RfrIndxLS*(Dist-LengthWater)*1e6/c + RfrIndxWR*LengthWater*1e6/c;
 }
