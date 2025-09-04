@@ -602,13 +602,13 @@ bool SNiPERToPlainTreeSPMT::execute()
 	}
 	 //std::cout<<"ChargeTot "<<ChargeTot<<std::endl;
 //	 if (ChargeTot > 1000 && ChargeTot < 60000)
-	{
-		m_PmtIdCalib.insert(m_PmtIdCalib.end(), tempPmtIds.begin(), tempPmtIds.end());
-		m_HitTimeCalib.insert(m_HitTimeCalib.end(), tempHitTimes.begin(), tempHitTimes.end());
-		m_ChargeCalib.insert(m_ChargeCalib.end(), tempCharges.begin(), tempCharges.end());
-		m_CircleNo.insert(m_CircleNo.end(), tempCircleNo.begin(), tempCircleNo.end());
-		m_PmtType.insert(m_PmtType.end(), tempType.begin(), tempType.end());
-	}
+	//{
+	//	m_PmtIdCalib.insert(m_PmtIdCalib.end(), tempPmtIds.begin(), tempPmtIds.end());
+	//	m_HitTimeCalib.insert(m_HitTimeCalib.end(), tempHitTimes.begin(), tempHitTimes.end());
+	//	m_ChargeCalib.insert(m_ChargeCalib.end(), tempCharges.begin(), tempCharges.end());
+	//	m_CircleNo.insert(m_CircleNo.end(), tempCircleNo.begin(), tempCircleNo.end());
+	//	m_PmtType.insert(m_PmtType.end(), tempType.begin(), tempType.end());
+	//}
 
 	 ChargeTot=0;
 	if(calibeventSPMT)
@@ -741,8 +741,8 @@ bool SNiPERToPlainTreeSPMT::Book_tree()
 	m_ntuple1->Branch("EntryNb", &m_iEvt, "EntryNb/I");
 	m_ntuple1->Branch("RunNb", &m_iRun,"RunNb/I");
 	m_ntuple1->Branch("EvtID",&m_EvtID,"EvtID/I");
-	m_ntuple1->Branch("AssID",&m_AssembleID,"AssID/I");
-	m_ntuple1->Branch("TriggerTime",&m_Trigger,"TriggerTime/l");
+	//m_ntuple1->Branch("AssID",&m_AssembleID,"AssID/I");
+	//m_ntuple1->Branch("TriggerTime",&m_Trigger,"TriggerTime/l");
 	m_ntuple1->Branch("TriggerName", &m_TriggerName);
 	m_ntuple1->Branch("TimeStamp",&m_TimeStamp,"TimeStamp/l");
 	m_ntuple1->Branch("ChargeTotLPMT",&m_ChargeTotLPMT,"ChargeTotLPMT/D");
@@ -753,7 +753,7 @@ bool SNiPERToPlainTreeSPMT::Book_tree()
 	m_ntuple1->Branch("NbHitWPCalib", &m_NbHitWPCalib, "NbHitWPCalib/I");
 	m_ntuple1->Branch("PmtIDCalib", &m_PmtIdCalib);
 	m_ntuple1->Branch("PmtCircle", &m_CircleNo);
-	m_ntuple1->Branch("PmtType", &m_PmtType);
+	//m_ntuple1->Branch("PmtType", &m_PmtType);
 	m_ntuple1->Branch("HitTimeCalib", &m_HitTimeCalib);
 	m_ntuple1->Branch("HitTimeCalibTOF", &m_HitTimeCalibTOF);
 	m_ntuple1->Branch("ChargeCalib", &m_ChargeCalib);
