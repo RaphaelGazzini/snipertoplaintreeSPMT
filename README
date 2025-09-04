@@ -1,0 +1,2 @@
+SNiPERToPlainTree is a program developped to convert JUNO SNiPER EDM file to plain root for a quick analysis
+Command to launch : python run.py --input SIM_FILENAME ELEC_FILENAME CALIB_FILENAME  --output PLAIN_FILENAME 

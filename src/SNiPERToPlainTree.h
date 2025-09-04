@@ -1,0 +1,178 @@
+#ifndef SNIPERTOPLAINTREE
+#define SNIPERTOPLAINTREE
+
+#include "SniperKernel/AlgBase.h"
+#include "EvtNavigator/NavBuffer.h"
+#include <vector>
+#include "TTree.h"
+#include "TFile.h"
+#include "TString.h"
+#include "TVector3.h"
+#include "SpmtElecConfigSvc/SpmtElecConfigSvc.h"
+#include "OECTagSvc/OECTagSvc.h"
+#include "OECTagID/OECTagID.h"
+#include <cstdint>
+#include <string>
+#include <map>
+
+class RecGeomSvc; 
+class CdGeom;
+
+  struct CalibValues {
+        double E1;
+        double E2;
+        double E3;
+    };
+class SNiPERToPlainTree : public AlgBase
+{
+private :
+  
+  double ComputeLTOF(double pmtid, double evtx, double evty, double evtz);
+  double ComputeSTOF(double pmtid, double evtx, double evty, double evtz);
+  
+public :
+  
+  SNiPERToPlainTree(const std::string& name);
+  
+  
+  bool initialize();
+  bool execute();
+  bool finalize();
+  void setTxtFileName(const std::string& fileName) { m_txtFileName = fileName; }
+  bool Book_tree();
+  void clearAllTrees();	
+  bool LoadCalibValues(const std::string& txtFileName);
+  
+private :
+
+  //Alg Property
+  bool saveElec;
+  int interface;
+
+  //CdGeom*  m_cdGeom;
+  std::map<int, CalibValues> fCalibValues;
+
+  std::string m_txtFileName;
+        //tag list
+  uint32_t strict_dIBD;
+  uint32_t i_pBiPo212pair;
+  uint32_t i_dBiPo212pair;
+
+  uint32_t i_pBiPo214pair;
+  uint32_t i_dBiPo214pair;
+
+  uint32_t i_pIBD; 
+  uint32_t i_dIBD;
+  
+  uint32_t i_SingleSE;
+  uint32_t i_SingleME;
+  uint32_t i_SingleLE;
+
+  uint32_t i_pSpallNeutron;
+  uint32_t i_dSpallNeutron;
+
+  uint32_t i_pB12;
+  uint32_t i_dB12;
+
+  
+  unsigned int TotalLPMT = 17612;
+  unsigned int TotalSPMT = 25600;
+  
+  std::vector<TVector3> ALL_LPMT_pos;
+  std::vector<TVector3> ALL_SPMT_pos;
+  
+  int m_iEvt;
+ 
+  JM::NavBuffer* m_buf;
+  SpmtElecConfigSvc* m_spmtSvc;
+  OECTagSvc* m_tagsvc;
+  uint32_t m_EvtID;
+  uint64_t m_AssembleID;
+  int m_iRun;
+  long long m_Trigger;
+  uint64_t m_TimeStamp;
+  
+  double m_ChargeTotLPMT;
+  double m_ChargeTotUpLPMT;
+  double m_ChargeTotSPMT;
+  double m_ChargeTotWP;
+  unsigned long m_TimeStampInNanoSec; 
+
+  
+  TTree *m_ntuple1; // calibration tree
+  int m_NbHitLPMTCalib;
+  int m_NbHitSPMTCalib;
+  int m_NbHitWPCalib;
+  std::vector<int> m_PmtIdCalib;
+  std::vector<double> m_HitTimeCalib;
+  std::vector<double> m_HitTimeCalibTOF;
+  std::vector<double> m_ChargeCalib;
+  std::vector<int> m_CircleNo;
+  std::vector<std::string> m_PmtType;
+  
+  
+  
+  TTree *m_ntuple3; // elec tree for SPMT
+  int m_NbHitLPMTElec;
+  int m_NbHitSPMTElec;
+  int m_GCUNumber;
+  int m_PmtIdElec;
+  int m_blockID;
+  int m_channelNumber;
+  int m_channelID;
+  std::vector<unsigned int> m_gain;
+  std::vector<unsigned int> m_blockCounter;
+  std::vector<unsigned int> m_channelCounter;
+  std::vector<unsigned int> m_BECTime;
+  std::vector<unsigned int> m_coarseTime;
+  std::vector<unsigned int> m_CTOverflow;
+  std::vector<unsigned int> m_fineTime;
+  std::vector<unsigned int> m_charge;
+  std::vector<unsigned int> m_channelFlag;
+
+  TTree *m_ntuple4; // elec tree for LPMT 
+  //unsigned long long m_DateTimeLPMTElec;
+  unsigned long long m_TimeStampLPMTElec;
+  //unsigned long long m_TriggerTimeLPMTElec;	
+  int m_NbFiredChannelLPMTElec; //Number of different channels fired in the event 
+  int m_GCUNumberLPMTElec; //GCU Number for LPMT
+  int m_CopyNoLPMTElec;
+  int m_PmtIDLPMTElec;    // PmtID
+  std::vector<unsigned int> m_HitTimeLPMTElec; // vector of Hit Time of LPMT
+  std::vector<uint16_t> m_ChargeLPMTElec; // vector of charge of LPMT
+
+  TTree *m_ntuple5; // General info of the event
+  uint64_t m_TriggerTime;
+  int m_TriggerSize;
+  // char m_TriggerName[100];
+  std::vector<std::string> m_TriggerName;
+  //uint64_t m_TimeStamp;
+  double m_oecevt_E;
+  double m_oecevt_totCharge;     
+  double m_oecevt_X;
+  double m_oecevt_Y;
+  double m_oecevt_Z; 
+  int m_mytag;
+  std::vector<int> m_EventTag;
+  int m_WPnHit;
+  int m_WPTrigTime;
+
+  TTree *m_ntuple6; // reco tree
+  double m_TotalPERec;
+  int m_NFiredPMT;
+  double m_RecE;
+  double m_RecX;
+  double m_RecY;
+  double m_RecZ;
+  double m_T0;
+
+
+  double PMT_R;
+  double LS_R;
+  
+  double RfrIndxLS;
+  double RfrIndxWR;
+  double c;
+};
+
+#endif
